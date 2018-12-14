@@ -1,3 +1,6 @@
+# Demo to use cameras: copied from 
+# https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_gui/py_video_display/py_video_display.html
+
 import numpy as np
 import cv2
 
