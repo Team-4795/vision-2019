@@ -1,15 +1,19 @@
 import numpy as np
 import cv2
+import math
 
+def reject_outliers(data, m=2):
+    return data[abs(data - np.mean(data)) < m * np.std(data)]
+	
 #read test image
-testFrame = cv2.imread("test-images/1ftH7ftD0Angle0Brightness.jpg");
+testFrame = cv2.imread("test-images/CargoAngledDark48in.jpg");
 
 #change colorspaces
 hsvFrame = cv2.cvtColor(testFrame, cv2.COLOR_BGR2HSV)
 
 #set bounds for what is "green" and threshold based on that values
-lowerHSVBound = np.array([85, 100, 100])
-upperHSVBound = np.array([100, 255, 255])
+lowerHSVBound = np.array([50, 100, 100])
+upperHSVBound = np.array([84, 255, 255])
 maskFrame = cv2.inRange(hsvFrame, lowerHSVBound, upperHSVBound)
 
 #perform morphological transformation to remove noise from the image
@@ -25,41 +29,58 @@ contourFrame, contours, hierarchy = cv2.findContours(edgeFrame,cv2.RETR_TREE,cv2
 largestSize = -1
 secondLargestSize = -1
 index = 0
-tape1 = []
-tape2 = []
+
+tapes = []
+tapeSizes = []
 
 #get actual hierarchy from within the bloated datatype
 hierarchy = hierarchy[0]
 
-for contour in contours:
-	if hierarchy[index, 3] >= 0: #this removes contour douplicates caused by the canny edge detector
-		size = cv2.contourArea(contour)
-		if size > largestSize:
-			tape1 = contour
-			largestSize = size
-	index += 1
-	
-index = 0
+#get sizes of all the contours
 for contour in contours:
 	if hierarchy[index, 3] >= 0:
-		size = cv2.contourArea(contour)
-		if size > secondLargestSize and size < largestSize:
-			tape2 = contour
-			secondLargestSize = size
+		tapeSizes.append(cv2.contourArea(contour))
 	index += 1
 
-#find the position of the center of these contours and display them on the original frame
-M1 = cv2.moments(tape1)
-M2 = cv2.moments(tape2)
+#get rid out of outliers in the data (only keep real tape objects)
+tapeSizes = reject_outliers(np.array(tapeSizes)).tolist()
 
-x1 = int(M1['m10']/M1['m00'])
-y1 = int(M1['m01']/M1['m00'])
+#add the non-outliers to a new list called tapes
+index = 0
+for contour in contours:
+	if hierarchy[index, 3] >= 0 and cv2.contourArea(contour) in tapeSizes: #this removes contour douplicates caused by the canny edge detector
+		tapes.append(contour)
+	index += 1
 
-x2 = int(M2['m10']/M2['m00'])
-y2 = int(M2['m01']/M2['m00'])
 
-cv2.circle(testFrame, (x1, y1), 3, (255, 0, 0), -1)
-cv2.circle(testFrame, (x2, y2), 3, (255, 0, 0), -1)
+#get metadata of the tape objects which is all we need (position and angle) and seperate them into two groups:
+#tape that is slanted inwards, and tape that is slanted outwords
+tapeIn = []
+tapeOut = []
+
+for tape in tapes:
+	box = cv2.minAreaRect(tape)
+	angle = box[2]
+	M = cv2.moments(tape)
+	x1 = int(M['m10']/M['m00'])
+	y1 = int(M['m01']/M['m00'])
+	if angle < 0 and angle > -20:
+		tapeIn.append((x1, y1))
+		cv2.circle(testFrame, (x1, y1), 3, (255, 0, 0), -1)
+	if angle > -80 and angle < -50:
+		tapeOut.append((x1, y1))
+		cv2.circle(testFrame, (x1, y1), 3, (0, 0, 255), -1)
+
+for tape in tapeIn:
+	smallestDist = 1000000
+	pos2 = []
+	for tape2 in tapeOut:
+		dist = math.sqrt((tape[0] - tape2[0])**2 + (tape[1] - tape2[0])**2)
+		if dist < smallestDist:
+			smallestDist = dist
+			pos2 = tape2
+	cv2.circle(testFrame, (int((tape[0] + pos2[0]) / 2), int((tape[1] + pos2[1]) / 2)), 3, (255, 0, 255), -1)
+
 
 #display results
 cv2.imshow("testFrame", testFrame)
