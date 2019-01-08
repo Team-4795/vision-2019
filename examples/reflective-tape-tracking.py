@@ -6,7 +6,7 @@ def reject_outliers(data, m=2):
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 	
 #read test image
-testFrame = cv2.imread("test-images/CargoSideStraightDark60in.jpg");
+testFrame = cv2.imread("test-images/CargoStraightDark48in.jpg");
 
 #change colorspaces
 hsvFrame = cv2.cvtColor(testFrame, cv2.COLOR_BGR2HSV)
@@ -81,6 +81,8 @@ for tape in tapeIn:
 		if dist > 0 and dist < smallestDist: #tape is to the right AND is closer than any previous tapes
 			smallestDist = dist
 			pos2 = tape2
+	if pos2 == []: #if there is no corresponding tape, dont identify it as a goal
+		break
 	cv2.circle(testFrame, (int((tape[0] + pos2[0]) / 2), int((tape[1] + pos2[1]) / 2)), 3, (255, 0, 255), -1)
 
 
