@@ -6,7 +6,7 @@ def reject_outliers(data, m=2):
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 	
 #read test image
-testFrame = cv2.imread("test-images/CargoAngledDark48in.jpg");
+testFrame = cv2.imread("test-images/CargoSideStraightDark60in.jpg");
 
 #change colorspaces
 hsvFrame = cv2.cvtColor(testFrame, cv2.COLOR_BGR2HSV)
@@ -66,17 +66,19 @@ for tape in tapes:
 	y1 = int(M['m01']/M['m00'])
 	if angle < 0 and angle > -20:
 		tapeIn.append((x1, y1))
-		cv2.circle(testFrame, (x1, y1), 3, (255, 0, 0), -1)
+		#cv2.circle(testFrame, (x1, y1), 3, (255, 0, 0), -1)
 	if angle > -80 and angle < -50:
 		tapeOut.append((x1, y1))
-		cv2.circle(testFrame, (x1, y1), 3, (0, 0, 255), -1)
+		#cv2.circle(testFrame, (x1, y1), 3, (0, 0, 255), -1)
 
+#identify the goals in the image using the different types of tapes
+#if an in tape has a nearby out tape to its right side, it means there must be a goal
 for tape in tapeIn:
 	smallestDist = 1000000
 	pos2 = []
 	for tape2 in tapeOut:
-		dist = math.sqrt((tape[0] - tape2[0])**2 + (tape[1] - tape2[0])**2)
-		if dist < smallestDist:
+		dist = tape[0] - tape2[0]
+		if dist > 0 and dist < smallestDist: #tape is to the right AND is closer than any previous tapes
 			smallestDist = dist
 			pos2 = tape2
 	cv2.circle(testFrame, (int((tape[0] + pos2[0]) / 2), int((tape[1] + pos2[1]) / 2)), 3, (255, 0, 255), -1)
@@ -87,7 +89,7 @@ cv2.imshow("testFrame", testFrame)
 #enabling this can be useful for using a color picker to find exactly what range of HSV
 #works for your image/object
 #cv2.imshow("hsvFrame", hsvFrame)
-cv2.imshow("maskFrame", maskFrame)
+#cv2.imshow("maskFrame", maskFrame)
 
 cv2.waitKey()
 
