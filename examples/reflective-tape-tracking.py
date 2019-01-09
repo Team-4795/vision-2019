@@ -6,7 +6,7 @@ def reject_outliers(data, m=2):
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 	
 #read test image
-testFrame = cv2.imread("test-images/CargoStraightDark48in.jpg");
+testFrame = cv2.imread("test-images/CargoSideStraightDark60in.jpg");
 
 #change colorspaces
 hsvFrame = cv2.cvtColor(testFrame, cv2.COLOR_BGR2HSV)
