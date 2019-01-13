@@ -39,7 +39,7 @@ new_height = image_size.height / 2
 
 # Declare your sl.Mat matrices
 image_zed = sl.Mat(new_width, new_height, sl.MAT_TYPE.MAT_TYPE_8U_C4)
-depth_image_zed = sl.Mat(new_width, new_height, sl.MAT_TYPE.MAT_TYPE_8U_C4)
+depth_image_zed = sl.Mat()
 
 key = ' '
 while key != 113 :
@@ -47,19 +47,17 @@ while key != 113 :
     if err == sl.ERROR_CODE.SUCCESS :
         # Retrieve the left image, depth image in the half-resolution
         zed.retrieve_image(image_zed, sl.VIEW.VIEW_LEFT, sl.MEM.MEM_CPU, int(new_width), int(new_height))
-        zed.retrieve_image(depth_image_zed, sl.VIEW.VIEW_DEPTH, sl.MEM.MEM_CPU, int(new_width), int(new_height))
+        zed.retrieve_measure(depth_image_zed, sl.MEASURE.MEASURE_DEPTH)
         
         # To recover data from sl.Mat to use it with opencv, use the get_data() method
         # It returns a numpy array that can be used as a matrix with opencv
         testFrame = image_zed.get_data()
-        depth_image_ocv = depth_image_zed.get_data()
-            
         #change colorspaces
         hsvFrame = cv2.cvtColor(testFrame, cv2.COLOR_BGR2HSV)
                 
         #set bounds for what is "green" and threshold based on that values
-        lowerHSVBound = np.array([70, 100, 100])
-        upperHSVBound = np.array([120, 255, 255])
+        lowerHSVBound = np.array([60, 100, 50])
+        upperHSVBound = np.array([100, 255, 255])
         maskFrame = cv2.inRange(hsvFrame, lowerHSVBound, upperHSVBound)
 
         #perform morphological transformation to remove noise from the image
@@ -110,8 +108,12 @@ while key != 113 :
                 box = cv2.minAreaRect(tape)
                 angle = box[2]
                 M = cv2.moments(tape)
-                x1 = int(M['m10']/M['m00'])
-                y1 = int(M['m01']/M['m00'])
+                if M['m00'] != 0:
+                    x1 = int(M['m10']/M['m00'])
+                    y1 = int(M['m01']/M['m00'])
+                else:
+                    x1 = 0
+                    y1 = 0
                 if angle < 0 and angle > -40:
                     tapeIn.append((x1, y1))
                     #cv2.circle(testFrame, (x1, y1), 3, (255, 0, 0), -1)
@@ -131,13 +133,19 @@ while key != 113 :
                         pos2 = tape2
                     if pos2 == []: #if there is no corresponding tape, dont identify it as a goal
                         break
-                    cv2.circle(testFrame, (int((tape[0] + pos2[0]) / 2), int((tape[1] + pos2[1]) / 2)), 3, (255, 0, 255), -1)
-
+                    pixel_x = int((tape[0] + pos2[0]) / 2)
+                    pixel_y = int((tape[1] + pos2[1]) / 2)
+                    real_depth = depth_image_zed.get_value(tape[0], tape[1])[1]
+                    angle2target = math.atan((pixel_x - (np.size(testFrame, 1) / 2)) / 350)
+                    real_x = real_depth * math.tan(angle2target)
+                    cv2.circle(testFrame, (pixel_x, pixel_y), 3, (255, 0, 255), -1)
+                    cv2.putText(testFrame, "depth: " + str(real_depth) + " Xpos: " + str(real_x), (pixel_x + 15, pixel_y), cv2.FONT_HERSHEY_COMPLEX, 0.3, (0, 0, 255), 1, cv2.LINE_AA)
+                    
         #display results
         cv2.imshow("testFrame", testFrame)
         #enabling this can be useful for using a color picker to find exactly what range of HSV
         #works for your image/object
-        #cv2.imshow("hsvFrame", hsvFrame)
+        cv2.imshow("hsvFrame", hsvFrame)
         cv2.imshow("maskframe", edgeFrame)
         key = cv2.waitKey(10)
 
