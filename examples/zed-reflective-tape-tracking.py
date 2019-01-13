@@ -39,7 +39,7 @@ new_height = image_size.height / 2
 
 # Declare your sl.Mat matrices
 image_zed = sl.Mat(new_width, new_height, sl.MAT_TYPE.MAT_TYPE_8U_C4)
-depth_image_zed = sl.Mat()
+depth_map_zed = sl.Mat()
 
 key = ' '
 while key != 113 :
@@ -47,7 +47,7 @@ while key != 113 :
     if err == sl.ERROR_CODE.SUCCESS :
         # Retrieve the left image, depth image in the half-resolution
         zed.retrieve_image(image_zed, sl.VIEW.VIEW_LEFT, sl.MEM.MEM_CPU, int(new_width), int(new_height))
-        zed.retrieve_measure(depth_image_zed, sl.MEASURE.MEASURE_DEPTH)
+        zed.retrieve_measure(depth_map_zed, sl.MEASURE.MEASURE_DEPTH)
         
         # To recover data from sl.Mat to use it with opencv, use the get_data() method
         # It returns a numpy array that can be used as a matrix with opencv
@@ -133,20 +133,37 @@ while key != 113 :
                         pos2 = tape2
                     if pos2 == []: #if there is no corresponding tape, dont identify it as a goal
                         break
+                    #pixel coords of the center of the target
                     pixel_x = int((tape[0] + pos2[0]) / 2)
                     pixel_y = int((tape[1] + pos2[1]) / 2)
-                    real_depth = depth_image_zed.get_value(tape[0], tape[1])[1]
-                    angle2target = math.atan((pixel_x - (np.size(testFrame, 1) / 2)) / 350)
-                    real_x = real_depth * math.tan(angle2target)
+
+                    #depth of each tape strip and their difference
+                    right_tape_depth = depth_map_zed.get_value(tape[0], tape[1])[1]
+                    left_tape_depth =  depth_map_zed.get_value(tape2[0], tape2[1])[1]
+                    target_depth = (right_tape_depth + left_tape_depth) / 2
+                    deltad = right_tape_depth - left_tape_depth
+
+                    #angle to each of those tapes
+                    angle_to_right_tape = math.atan((tape[0] - (np.size(testFrame, 1) / 2)) / 350)
+                    angle_to_left_tape = math.atan((tape2[0] - (np.size(testFrame, 1) / 2)) / 350)
+                    angle_to_target = math.atan((pixel_x - (np.size(testFrame, 1) / 2)) / 350)
+                    
+                    #get real world x offset in meters
+                    right_tape_x_meters = right_tape_depth * math.tan(angle_to_right_tape)
+                    left_tape_x_meters = left_tape_depth * math.tan(angle_to_left_tape)
+                    delta_x_meters = right_tape_x_meters - left_tape_x_meters
+
+                    correction_angle = math.atan(deltad/delta_x_meters)
+                    real_x = target_depth * math.tan(angle_to_target)
                     cv2.circle(testFrame, (pixel_x, pixel_y), 3, (255, 0, 255), -1)
-                    cv2.putText(testFrame, "depth: " + str(real_depth) + " Xpos: " + str(real_x), (pixel_x + 15, pixel_y), cv2.FONT_HERSHEY_COMPLEX, 0.3, (0, 0, 255), 1, cv2.LINE_AA)
+                    cv2.putText(testFrame, "Z: " + str(target_depth) + " X: " + str(real_x) + " A: " + str(math.degrees(correction_angle)), (pixel_x + 15, pixel_y), cv2.FONT_HERSHEY_COMPLEX, 0.3, (0, 0, 255), 1, cv2.LINE_AA)
                     
         #display results
         cv2.imshow("testFrame", testFrame)
         #enabling this can be useful for using a color picker to find exactly what range of HSV
         #works for your image/object
-        cv2.imshow("hsvFrame", hsvFrame)
-        cv2.imshow("maskframe", edgeFrame)
+        #cv2.imshow("hsvFrame", hsvFrame)
+        #cv2.imshow("maskframe", edgeFrame)
         key = cv2.waitKey(10)
 
 cv2.destroyAllWindows()
