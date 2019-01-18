@@ -8,6 +8,11 @@ import math
 def reject_outliers(data, m=2):
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
+def reject_outliers_2(data, m = 2.):
+    d = np.abs(data - np.median(data))
+    mdev = np.median(d)
+    s = d/(mdev if mdev else 1.)
+    return data[s<m]
 
 zed = sl.Camera()
 
@@ -56,7 +61,7 @@ while key != 113 :
         hsvFrame = cv2.cvtColor(testFrame, cv2.COLOR_BGR2HSV)
                 
         #set bounds for what is "green" and threshold based on that values
-        lowerHSVBound = np.array([60, 100, 50])
+        lowerHSVBound = np.array([60, 50, 30])
         upperHSVBound = np.array([100, 255, 255])
         maskFrame = cv2.inRange(hsvFrame, lowerHSVBound, upperHSVBound)
 
@@ -78,26 +83,26 @@ while key != 113 :
         tapeSizes = []
         if len(contours) > 0:
             
-            '''
+            
             #get actual hierarchy from within the bloated datatype
             hierarchy = hierarchy[0]
             #get sizes of all the contours
             for contour in contours:
-                if hierarchy[index, 3] >= 0:
-                    tapeSizes.append(cv2.contourArea(contour))
-                    index += 1
+                #if hierarchy[index, 3] >= 0:
+                tapeSizes.append(cv2.contourArea(contour))
+                index += 1
 
             #get rid out of outliers in the data (only keep real tape objects)
-            tapeSizes = reject_outliers(np.array(tapeSizes), 3).tolist()
+            tapeSizes = reject_outliers_2(np.array(tapeSizes), 3).tolist()
 
-            print(len(tapeSizes))
-            '''
+            #print(len(tapeSizes))
+            
             #add the non-outliers to a new list called tapes
             index = 0
             for contour in contours:
-                #if hierarchy[index, 3] >= 0: #this removes contour douplicates caused by the canny edge detector
-                tapes.append(contour)
-                index += 1
+                if cv2.contourArea(contour) in tapeSizes: #this removes contour douplicates caused by the canny edge detector
+                    tapes.append(contour)
+                    index += 1
             
             #get metadata of the tape objects which is all we need (position and angle) and seperate them into two groups:
             #tape that is slanted inwards, and tape that is slanted outwords
@@ -163,8 +168,8 @@ while key != 113 :
         cv2.imshow("testFrame", testFrame)
         #enabling this can be useful for using a color picker to find exactly what range of HSV
         #works for your image/object
-        #cv2.imshow("hsvFrame", hsvFrame)
-        #cv2.imshow("maskframe", maskFrame)
+        cv2.imshow("hsvFrame", hsvFrame)
+        cv2.imshow("maskframe", maskFrame)
         key = cv2.waitKey(10)
 
 cv2.destroyAllWindows()
