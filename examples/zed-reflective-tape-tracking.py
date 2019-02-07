@@ -3,7 +3,10 @@ import pyzed.sl as sl
 import numpy as np
 import cv2
 import math
+import threading
+from networktables import NetworkTables
 
+display = True;
 
 def reject_outliers(data, m=2):
     return data[abs(data - np.mean(data)) < m * np.std(data)]
@@ -30,7 +33,7 @@ if err != sl.ERROR_CODE.SUCCESS:
     zed.close()
     exit(1)
 
-zed.set_camera_settings(sl.CAMERA_SETTINGS.CAMERA_SETTINGS_EXPOSURE, 20, False)
+zed.set_camera_settings(sl.CAMERA_SETTINGS.CAMERA_SETTINGS_EXPOSURE, 10, False)
 zed.set_camera_settings(sl.CAMERA_SETTINGS.CAMERA_SETTINGS_BRIGHTNESS, 0, False)
 zed.set_camera_settings(sl.CAMERA_SETTINGS.CAMERA_SETTINGS_CONTRAST, 0, False)
 
@@ -45,6 +48,28 @@ new_height = image_size.height / 2
 # Declare your sl.Mat matrices
 image_zed = sl.Mat(new_width, new_height, sl.MAT_TYPE.MAT_TYPE_8U_C4)
 depth_map_zed = sl.Mat()
+
+cond = threading.Condition()
+notified = [False]
+
+def connectionListener(connected, info):
+    print(info, '; Connected=%s' % connected)
+    with cond:
+        notified[0] = True
+        cond.notify()
+
+NetworkTables.initialize(server='10.47.95.2')
+NetworkTables.addConnectionListener(connectionListener, immediateNotify=True)
+
+with cond:
+    print("Waiting")
+    if not notified[0]:
+        cond.wait()
+
+# Insert your processing code here
+print("Connected!")
+
+table = NetworkTables.getTable('SmartDashboard')
 
 key = ' '
 while key != 113 :
@@ -73,7 +98,7 @@ while key != 113 :
         #get contours of the detected tape
         edgeFrame = cv2.Canny(maskFrame,100,200)
         contourFrame, contours, hierarchy = cv2.findContours(edgeFrame, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
+        
         #iterate over all found contours and find the two largest
         largestSize = -1
         secondLargestSize = -1
@@ -121,10 +146,10 @@ while key != 113 :
                     y1 = 0
                 if angle < 0 and angle > -40:
                     tapeIn.append((x1, y1))
-                    #cv2.circle(testFrame, (x1, y1), 3, (255, 0, 0), -1)
+                    cv2.circle(testFrame, (x1, y1), 3, (255, 0, 0), -1)
                 if angle > -80 and angle < -50:
                     tapeOut.append((x1, y1))
-                    #cv2.circle(testFrame, (x1, y1), 3, (0, 0, 255), -1)
+                    cv2.circle(testFrame, (x1, y1), 3, (0, 0, 255), -1)
 
             #identify the goals in the image using the different types of tapes
             #if an in tape has a nearby out tape to its right side, it means there must be a goal
@@ -163,14 +188,20 @@ while key != 113 :
                 real_x = target_depth * math.tan(angle_to_target)
                 cv2.circle(testFrame, (pixel_x, pixel_y), 3, (255, 0, 255), -1)
                 cv2.putText(testFrame, "Z: " + str(target_depth) + " X: " + str(real_x) + " A: " + str(math.degrees(correction_angle)), (pixel_x + 15, pixel_y), cv2.FONT_HERSHEY_COMPLEX, 0.3, (0, 0, 255), 1, cv2.LINE_AA)
+                if display == False:
+                    table.putNumber('Z', target_depth * 3.028)
+                    table.putNumber('X', real_x * 3.028)
+                    table.putNumber('Angle', 0)
+                    #print("Z: " + str(target_depth) + " X: " + str(real_x) + " A: " + str(math.degrees(correction_angle)))
                     
-        #display results
-        cv2.imshow("testFrame", testFrame)
-        #enabling this can be useful for using a color picker to find exactly what range of HSV
-        #works for your image/object
-        cv2.imshow("hsvFrame", hsvFrame)
-        cv2.imshow("maskframe", maskFrame)
-        key = cv2.waitKey(10)
+        if display == True:
+            #display results
+            cv2.imshow("testFrame", testFrame)
+            #enabling this can be useful for using a color picker to find exactly what range of HSV
+            #works for your image/object
+            #cv2.imshow("hsvFrame", hsvFrame)
+            cv2.imshow("maskframe", maskFrame)
+            key = cv2.waitKey(10)
 
 cv2.destroyAllWindows()
 zed.close()
